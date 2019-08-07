@@ -1,0 +1,102 @@
+---
+- hosts: all
+  become: true
+  tasks:
+
+    # - name: Update and upgrade apt packages
+    #   apt:
+    #     upgrade: yes
+    #     update_cache: yes
+
+
+    - name: Create mount dir
+      file:
+        path: /var/www/owncloud/data
+        state: directory
+
+    # - name: Format volume
+    #   filesystem:
+    #     fstype: ext4
+    #     dev: /dev/sda1
+    #
+    # - name: Create mountpoint
+    #   mount:
+    #     path: /var/www/owncloud/data
+    #     src: /dev/sda1
+    #     fstype: ext4
+    #     state: mounted
+
+    - name: Update permissions
+      file:
+        path: /var/www/owncloud/data
+        state: directory
+        owner: www-data
+        group: www-data
+
+    - name: Install required packages for ownCloud
+      apt: name={{item}} state=present update-cache=yes
+      with_items:
+           - apache2
+           - mariadb-server
+           - php
+           - libapache2-mod-php7.*
+           - openssl
+           - php-imagick
+           - php7.*-common
+           - php7.*-curl
+           - php7.*-gd
+           - php7.*-imap
+           - php7.*-intl
+           - php7.*-json
+           - php7.*-ldap
+           - php7.*-mbstring
+           - libmcrypt-dev
+           - php7.*-mysql
+           - php7.*-pgsql
+           - php-smbclient
+           - php-ssh2
+           - php7.*-sqlite3
+           - php7.*-xml
+           - php7.*-zip
+           - python3-mysqldb
+           - python3-dev
+           - libmysqlclient-dev
+
+    - name: Add apt-key from ownCloud
+      apt_key:
+        url: https://download.owncloud.org/download/repositories/stable/Ubuntu_16.04/Release.key
+        state: present
+
+    - name: Add ownCloud repository
+      apt_repository:
+        repo: deb https://download.owncloud.org/download/repositories/stable/Ubuntu_16.04/ /
+        state: present
+
+    - name: Install / Download ownCloud
+      apt:
+        name: owncloud-files
+        update-cache: yes
+
+    - name: Create 'owncloud' Database
+      mysql_db:
+        name: owncloud
+        state: present
+
+    - name: Change password of owncloud database user
+      command: >
+        mysql -u root --execute="GRANT ALL ON owncloud.* to 'owncloud'@'localhost' IDENTIFIED BY 'owncloud'; FLUSH PRIVILEGES;"
+
+    - name: Copy ownCloud Apache config
+      template:
+        src: owncloud.j2
+        dest: "/etc/apache2/sites-available/owncloud.conf"
+
+    - name: Create syslink to available-sites
+      become: yes
+      file:
+        src: "/etc/apache2/sites-available/owncloud.conf"
+        dest: "/etc/apache2/sites-enabled/owncloud.conf"
+        state: link
+
+    - name: Restart Apache
+      command: "systemctl reload apache2"
